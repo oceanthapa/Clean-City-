@@ -2,75 +2,62 @@ using UnityEngine;
 
 public class PlayerPickup : MonoBehaviour
 {
-    public Camera playerCamera;
-    public float pickupRange = 10f;
-    public float holdDistance = 2f;
-
+    public float pickupRadius = 3f;
     private Trash heldTrash;
     private Rigidbody heldRb;
+    private Collider heldCol;
 
     void Update()
     {
         if (Input.GetKeyDown(KeyCode.E))
         {
             if (heldTrash == null)
-            {
                 TryPickup();
-            }
             else
-            {
                 DropTrash();
-            }
         }
 
-        // Hold object in front of camera
         if (heldTrash != null)
         {
             heldTrash.transform.position =
-                playerCamera.transform.position +
-                playerCamera.transform.forward * holdDistance;
+                transform.position + transform.forward * 1.5f + Vector3.up * 1.5f;
         }
     }
 
     void TryPickup()
     {
-        RaycastHit hit;
+        Collider[] hits = Physics.OverlapSphere(transform.position, pickupRadius);
 
-        Vector3 rayOrigin =
-            playerCamera.transform.position + playerCamera.transform.forward * 0.5f;
-
-        Vector3 rayDirection =
-            (playerCamera.transform.forward + Vector3.down * 0.2f).normalized;
-
-        Debug.DrawRay(rayOrigin, rayDirection * pickupRange, Color.red, 3f);
-
-        // 🔥 IMPORTANT: ignore Player layer completely
-        int layerMask = ~LayerMask.GetMask("Player");
-
-        if (Physics.Raycast(rayOrigin, rayDirection, out hit, pickupRange, layerMask))
+        foreach (Collider hit in hits)
         {
-            Debug.Log("Hit object: " + hit.collider.name);
+            // Skip self and children
+            if (hit.transform.IsChildOf(transform)) continue;
 
-            Trash trash = hit.collider.GetComponentInParent<Trash>();
+            Trash trash = hit.GetComponentInParent<Trash>();
+            if (trash == null) continue;
 
-            if (trash != null)
-            {
-                Debug.Log("Trash found!");
+            // Skip rocks and anything without Rigidbody
+            Rigidbody rb = trash.GetComponent<Rigidbody>();
+            if (rb == null) continue;
 
-                heldTrash = trash;
-                heldRb = trash.GetComponent<Rigidbody>();
+            heldTrash = trash;
+            heldRb = rb;
 
-                if (heldRb != null)
-                {
-                    heldRb.isKinematic = true;
-                    heldRb.useGravity = false;
-                }
-            }
+            heldRb.isKinematic = true;
+            heldRb.useGravity = false;
+
+            // Disable collider so it cant be picked up again
+            heldCol = trash.GetComponent<Collider>();
+            if (heldCol == null)
+                heldCol = trash.GetComponentInChildren<Collider>();
+            if (heldCol != null)
+                heldCol.enabled = false;
+
+            Debug.Log("Picked up: " + trash.name);
+            return;
         }
-        else
-        {
-            Debug.Log("Raycast hit nothing");
-        }
+
+        Debug.Log("No trash nearby");
     }
 
     void DropTrash()
@@ -81,7 +68,11 @@ public class PlayerPickup : MonoBehaviour
             heldRb.useGravity = true;
         }
 
+        if (heldCol != null)
+            heldCol.enabled = true;
+
         heldTrash = null;
         heldRb = null;
+        heldCol = null;
     }
 }
